@@ -9,6 +9,7 @@ type Route = {
   via: string[];
   stopovers?: { city: string; reason: string }[];
   by_mode: { mode: string; duration: string; cost_eur: number; has_cost: boolean }[];
+  booking_links?: { label: string; url: string; mode: string }[];
 };
 
 async function fetchResults(params: URLSearchParams) {
@@ -96,6 +97,22 @@ export default async function SearchPage({
                   </div>
                 ))}
               </div>
+
+              {r.booking_links?.length ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {r.booking_links.slice(0, 3).map((l, i) => (
+                    <a
+                      key={i}
+                      href={l.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-md border border-border px-3 py-2 text-xs text-foreground hover:opacity-90"
+                    >
+                      Book on {l.label}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
             </CardContent>
           </Card>
         ))}

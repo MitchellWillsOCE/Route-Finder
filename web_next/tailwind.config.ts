@@ -16,7 +16,8 @@ const config: Config = {
         muted: "#a9b0c3",
         card: "#12141a",
         border: "#232634",
-        primary: "#3b82f6",
+        primary: "#e5e7eb",
+        accent: "#22c55e",
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui"],

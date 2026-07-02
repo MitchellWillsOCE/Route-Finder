@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from route_finder.models import SearchRequest, TransportMode
 from route_finder.route_summary import mode_breakdown, route_via_hubs, suggest_stopovers
 from route_finder.search import search_routes
+from urllib.parse import urlparse
 
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE_DIR / "web" / "templates"
@@ -123,6 +124,48 @@ def _route_to_view(route, *, origin: str, destination: str) -> dict[str, Any]:
         "data_source": route.data_source,
         "legs": legs,
     }
+
+def _booking_label(url: str) -> str:
+    domain = urlparse(url).netloc.lower()
+    domain = domain.removeprefix("www.")
+    mapping = {
+        "www.skyscanner.net": "Skyscanner",
+        "skyscanner.net": "Skyscanner",
+        "shop.flixbus.com": "FlixBus",
+        "global.flixbus.com": "FlixBus",
+        "int.bahn.de": "Deutsche Bahn",
+        "bahn.de": "Deutsche Bahn",
+        "www.bahn.de": "Deutsche Bahn",
+        "www.ns.nl": "NS",
+        "ns.nl": "NS",
+        "www.omio.com": "Omio",
+        "omio.com": "Omio",
+        "www.ryanair.com": "Ryanair",
+        "ryanair.com": "Ryanair",
+    }
+    return mapping.get(domain, domain.split(":")[0])
+
+
+def _route_booking_links(route, *, max_links: int = 4) -> list[dict[str, str]]:
+    links: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for leg in route.legs:
+        if leg.mode == TransportMode.WALK:
+            continue
+        url = (leg.booking_url or "").strip()
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        links.append(
+            {
+                "label": _booking_label(url),
+                "url": url,
+                "mode": leg.mode.value,
+            }
+        )
+        if len(links) >= max_links:
+            break
+    return links
 
 def _run_search(job_id: str) -> None:
     with _jobs_lock:
@@ -266,6 +309,7 @@ def api_search(
             "cost_is_estimated": bool(r.price_estimated and not r.price_verified),
             "via": route_via_hubs(r, req.origin, req.destination),
             "stopovers": suggest_stopovers(r, req.origin, req.destination),
+            "booking_links": _route_booking_links(r),
             "by_mode": [
                 {
                     "mode": m["mode"],
