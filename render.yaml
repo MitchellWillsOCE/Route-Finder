@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: route-finder-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m route_finder.web
+    envVars:
+      - key: WEB_HOST
+        value: 0.0.0.0
+      - key: PYTHON_VERSION
+        value: "3.11"

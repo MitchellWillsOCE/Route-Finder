@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Form, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, ConfigDict, Field
 
 from route_finder.models import SearchRequest, TransportMode
 from route_finder.route_summary import mode_breakdown, route_via_hubs, suggest_stopovers
@@ -20,6 +22,14 @@ STATIC_DIR = BASE_DIR / "web" / "static"
 
 app = FastAPI(title="Europe Route Finder")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -121,6 +131,7 @@ def _route_to_view(route, *, origin: str, destination: str) -> dict[str, Any]:
         "via": via,
         "stopovers": stopovers,
         "by_mode": by_mode,
+        "booking_links": _route_booking_links(route),
         "data_source": route.data_source,
         "legs": legs,
     }
@@ -275,11 +286,49 @@ def job_status(job_id: str) -> dict[str, Any]:
         job = _jobs.get(job_id)
         if not job:
             return {"status": "error", "message": "Unknown job", "error": "Unknown job"}
-        return {
+        payload: dict[str, Any] = {
             "status": job.status,
             "message": job.message,
             "error": job.error,
         }
+        if job.status == "done" and job.result is not None:
+            payload["result"] = job.result
+        return payload
+
+
+class SearchStartBody(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_: str = Field(alias="from")
+    to: str
+    date: str | None = None
+    flex: int = 2
+
+
+def _start_search_job(origin: str, destination: str, date_raw: str, flex: int) -> str:
+    job_id = uuid4().hex
+    with _jobs_lock:
+        _jobs[job_id] = JobState(
+            status="pending",
+            message="Queued...",
+            created_at=datetime.now(),
+            query={
+                "origin": origin.strip() or "Amsterdam",
+                "destination": destination.strip() or "Naples",
+                "date": date_raw.strip(),
+                "flex": int(flex),
+            },
+        )
+    _pool.submit(_run_search, job_id)
+    return job_id
+
+
+@app.post("/api/search/start")
+def api_search_start(body: SearchStartBody) -> dict[str, str]:
+    date_raw = body.date or datetime.now().strftime("%Y-%m-%d")
+    job_id = _start_search_job(body.from_, body.to, date_raw, body.flex)
+    return {"job_id": job_id}
+
 
 @app.get("/api/search")
 def api_search(
@@ -288,10 +337,7 @@ def api_search(
     date: str | None = None,
     flex: int = 2,
 ) -> dict[str, Any]:  # noqa: A002
-    """
-    Minimal API for the shadcn/Next UI.
-    Returns only the core route fields (no data notes).
-    """
+    """Full route payload for the Next UI (legs, stops, booking links)."""
     date_raw = date or datetime.now().strftime("%Y-%m-%d")
     depart = _parse_date(date_raw)
     req = SearchRequest(
@@ -302,26 +348,7 @@ def api_search(
     )
     result = search_routes(req)
     routes = [
-        {
-            "label": r.label,
-            "duration": _format_duration(r.total_duration_minutes),
-            "total_cost_eur": round(r.total_cost_eur, 2),
-            "cost_is_estimated": bool(r.price_estimated and not r.price_verified),
-            "via": route_via_hubs(r, req.origin, req.destination),
-            "stopovers": suggest_stopovers(r, req.origin, req.destination),
-            "booking_links": _route_booking_links(r),
-            "by_mode": [
-                {
-                    "mode": m["mode"],
-                    "duration": m["duration"],
-                    "cost_eur": m["cost_eur"],
-                    "has_cost": m["has_cost"],
-                }
-                for m in _route_to_view(r, origin=req.origin, destination=req.destination)[
-                    "by_mode"
-                ]
-            ],
-        }
+        _route_to_view(r, origin=req.origin, destination=req.destination)
         for r in result.routes
     ]
     return {"routes": routes}
