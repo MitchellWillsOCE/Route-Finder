@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
+
+import { RouteMap } from "@/components/route-map-dynamic";
 import { RouteTimeline, type RouteLeg } from "@/components/route-timeline";
+import { SearchForm } from "@/components/search-form";
 import { Button } from "@/components/ui/button";
+import { apiBase } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type Route = {
   label: string;
@@ -23,68 +30,35 @@ type Props = {
   flex: string;
 };
 
-function apiBase(): string {
-  return process.env.NEXT_PUBLIC_ROUTE_FINDER_API || "http://127.0.0.1:8001";
-}
-
 export function SearchResults({ from, to, date, flex }: Props) {
   const [routes, setRoutes] = useState<Route[] | null>(null);
+  const [selected, setSelected] = useState(0);
   const [status, setStatus] = useState("Searching routes...");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setInterval> | undefined;
 
     async function run() {
       setRoutes(null);
       setError(null);
       setStatus("Searching routes...");
+      setSelected(0);
 
       try {
-        const base = apiBase();
-        const startRes = await fetch(`${base}/api/search/start`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            from,
-            to,
-            date: date || undefined,
-            flex: Number(flex) || 2,
-          }),
-        });
-        if (!startRes.ok) throw new Error("Could not start search");
-        const { job_id } = (await startRes.json()) as { job_id: string };
+        const params = new URLSearchParams({ from, to, flex });
+        if (date) params.set("date", date);
 
-        await new Promise<void>((resolve, reject) => {
-          timer = setInterval(async () => {
-            if (cancelled) return;
-            try {
-              const jobRes = await fetch(`${base}/api/job/${job_id}`);
-              if (!jobRes.ok) throw new Error("Search failed");
-              const job = (await jobRes.json()) as {
-                status: string;
-                message: string;
-                error?: string;
-                result?: { routes: Route[] };
-              };
-              if (job.status === "pending") {
-                setStatus(job.message || "Searching...");
-                return;
-              }
-              clearInterval(timer);
-              if (job.status === "error") {
-                reject(new Error(job.error || "Search failed"));
-                return;
-              }
-              setRoutes(job.result?.routes || []);
-              resolve();
-            } catch (err) {
-              clearInterval(timer);
-              reject(err);
-            }
-          }, 1200);
+        const res = await fetch(`${apiBase()}/api/search?${params.toString()}`, {
+          cache: "no-store",
         });
+        const data = (await res.json()) as { routes?: Route[]; error?: string };
+        if (!res.ok) {
+          throw new Error(data.error || "Search failed");
+        }
+        if (!cancelled) {
+          setRoutes(data.routes || []);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Search failed");
@@ -95,99 +69,149 @@ export function SearchResults({ from, to, date, flex }: Props) {
     run();
     return () => {
       cancelled = true;
-      if (timer) clearInterval(timer);
     };
   }, [from, to, date, flex]);
 
-  if (error) {
-    return (
-      <div className="rounded-lg border border-border bg-card p-4 text-sm">
-        <p className="text-foreground">{error}</p>
-        <a href="/" className="mt-3 inline-block">
-          <Button type="button">New search</Button>
-        </a>
-      </div>
-    );
-  }
-
-  if (!routes) {
-    return (
-      <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted">
-        <div className="mx-auto mb-3 h-5 w-5 animate-pulse rounded-full bg-muted/40" />
-        {status}
-      </div>
-    );
-  }
-
-  if (!routes.length) {
-    return (
-      <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted">
-        No routes found.
-      </div>
-    );
-  }
+  const active = routes?.[selected];
+  const activeLegs = active?.legs || [];
 
   return (
-    <div className="space-y-2">
-      {routes.map((r, idx) => (
-        <article
-          key={idx}
-          className="rounded-lg border border-border bg-card px-3 py-2.5 sm:px-4"
-        >
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <h2 className="text-sm font-semibold">{r.label}</h2>
-            <div className="text-sm tabular-nums">
-              <span className="font-semibold">{r.duration}</span>
-              <span className="mx-1.5 text-muted">·</span>
-              {r.total_cost_eur > 0 ? (
-                <span className="font-semibold">
-                  {r.cost_is_estimated ? "~" : ""}EUR {r.total_cost_eur.toFixed(2)}
-                </span>
-              ) : (
-                <span className="text-muted">Fare TBC</span>
-              )}
-            </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-3 rounded-lg border border-border bg-card p-3 lg:hidden">
+        <SearchForm
+          compact
+          initialFrom={from}
+          initialTo={to}
+          initialDate={date}
+          initialFlex={flex}
+        />
+      </div>
+
+      {error ? (
+        <div className="rounded-lg border border-border bg-card p-4 text-sm">
+          <p className="text-foreground">{error}</p>
+          <Link href="/" className="mt-3 inline-block">
+            <Button type="button">New search</Button>
+          </Link>
+        </div>
+      ) : null}
+
+      {!error && !routes ? (
+        <div className="rounded-lg border border-border bg-card p-6 text-center text-sm text-muted">
+          <div className="mx-auto mb-3 h-5 w-5 animate-pulse rounded-full bg-muted/40" />
+          {status}
+        </div>
+      ) : null}
+
+      {!error && routes && !routes.length ? (
+        <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted">
+          No routes found.
+        </div>
+      ) : null}
+
+      {!error && routes && routes.length > 0 ? (
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+          <div className="sticky top-0 z-20 h-[36vh] min-h-[200px] shrink-0 lg:sticky lg:top-4 lg:h-[calc(100vh-8rem)] lg:w-[42%] lg:min-h-[420px]">
+            <RouteMap legs={activeLegs} className="h-full shadow-lg" />
+            {active ? (
+              <div className="mt-2 rounded-md border border-border bg-card/90 px-3 py-2 text-xs backdrop-blur sm:text-sm">
+                <span className="font-semibold">{active.label}</span>
+                <span className="mx-1.5 text-muted">·</span>
+                <span>{active.duration}</span>
+                {active.total_cost_eur > 0 ? (
+                  <>
+                    <span className="mx-1.5 text-muted">·</span>
+                    <span>
+                      {active.cost_is_estimated ? "~" : ""}EUR {active.total_cost_eur.toFixed(2)}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
-          {r.via?.length ? (
-            <p className="mt-1 text-xs text-muted">
-              Via <span className="text-foreground">{r.via.join(" → ")}</span>
-            </p>
-          ) : null}
-
-          {r.by_mode?.length ? (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {r.by_mode.map((b, i) => (
-                <span
-                  key={i}
-                  className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px] text-muted"
+          <div className="min-w-0 flex-1 space-y-2 pb-4">
+            <p className="text-xs text-muted lg:hidden">Tap a route to view on map</p>
+            {routes.map((r, idx) => {
+              const isActive = idx === selected;
+              return (
+                <article
+                  key={idx}
+                  className={cn(
+                    "rounded-lg border px-3 py-2.5 transition-colors sm:px-4",
+                    isActive
+                      ? "border-accent bg-card ring-1 ring-accent/40"
+                      : "border-border bg-card hover:border-foreground/20",
+                  )}
                 >
-                  {b.mode.toUpperCase()} {b.duration}
-                  {b.has_cost ? ` · EUR ${b.cost_eur.toFixed(0)}` : ""}
-                </span>
-              ))}
-            </div>
-          ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setSelected(idx)}
+                    className="flex w-full items-start justify-between gap-2 text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-sm font-semibold leading-snug">{r.label}</h2>
+                      {r.via?.length ? (
+                        <p className="mt-0.5 text-xs text-muted">
+                          Via {r.via.join(" → ")}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1 text-sm tabular-nums">
+                      <div className="text-right">
+                        <div className="font-semibold">{r.duration}</div>
+                        <div className="text-xs text-muted">
+                          {r.total_cost_eur > 0
+                            ? `${r.cost_is_estimated ? "~" : ""}EUR ${r.total_cost_eur.toFixed(0)}`
+                            : "TBC"}
+                        </div>
+                      </div>
+                      <ChevronRight
+                        className={cn("h-4 w-4 text-muted", isActive && "text-accent")}
+                      />
+                    </div>
+                  </button>
 
-          {r.legs?.length ? <RouteTimeline legs={r.legs} /> : null}
+                  {isActive ? (
+                    <div className="mt-2 border-t border-border/60 pt-2">
+                      {r.by_mode?.length ? (
+                        <div className="mb-2 flex flex-wrap gap-1.5">
+                          {r.by_mode.map((b, i) => (
+                            <span
+                              key={i}
+                              className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px] text-muted"
+                            >
+                              {b.mode.toUpperCase()} {b.duration}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
 
-          {r.booking_links?.length ? (
-            <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/60 pt-2">
-              {r.booking_links.map((l, i) => (
-                <a
-                  key={i}
-                  href={l.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground hover:bg-foreground hover:text-background"
-                >
-                  Book on {l.label}
-                </a>
-              ))}
-            </div>
-          ) : null}
-        </article>
-      ))}
+                      {r.legs?.length ? <RouteTimeline legs={r.legs} /> : null}
+
+                      {r.booking_links?.length ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5 border-t border-border/60 pt-2">
+                          {r.booking_links.map((l, i) => (
+                            <a
+                              key={i}
+                              href={l.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex min-h-9 items-center rounded border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground hover:bg-foreground hover:text-background sm:text-xs"
+                            >
+                              Book on {l.label}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

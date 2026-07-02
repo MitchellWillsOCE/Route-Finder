@@ -11,5 +11,21 @@ body {
   background: theme(colors.background);
   color: theme(colors.foreground);
   font-family: theme(fontFamily.sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.leaflet-container {
+  background: #0b0c10;
+  font-family: inherit;
+}
+
+.leaflet-control-attribution {
+  font-size: 10px !important;
+  background: rgba(11, 12, 16, 0.85) !important;
+  color: #a9b0c3 !important;
+}
+
+.leaflet-control-attribution a {
+  color: #e5e7eb !important;
 }
 

@@ -16,3 +16,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# copied into web_next at build time for Vercel Python API (source of truth: /route_finder)
+web_next/route_finder/
+

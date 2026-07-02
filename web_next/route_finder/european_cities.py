@@ -1,0 +1,22 @@
+# Major European cities used for spelling correction when geocoding is ambiguous.
+MAJOR_EUROPEAN_CITIES = (
+    "Amsterdam", "Athens", "Barcelona", "Belgrade", "Berlin", "Birmingham", "Bologna",
+    "Bordeaux", "Bratislava", "Brussels", "Bucharest", "Budapest", "Cologne", "Copenhagen",
+    "Dublin", "Dusseldorf", "Edinburgh", "Florence", "Frankfurt", "Geneva", "Glasgow",
+    "Hamburg", "Helsinki", "Krakow", "Lisbon", "Ljubljana", "London", "Lyon", "Madrid",
+    "Manchester", "Marseille", "Milan", "Munich", "Nice", "Oslo", "Paris", "Porto",
+    "Prague", "Riga", "Rome", "Rotterdam", "Sarajevo", "Sofia", "Stockholm", "Stuttgart",
+    "Tallinn", "Tirana", "Turin", "Valencia", "Vienna", "Vilnius", "Warsaw", "Zagreb",
+    "Zurich", "Antwerp", "Ghent", "Bruges", "Luxembourg", "Strasbourg", "Lille",
+    "Nantes", "Toulouse", "Montpellier", "Seville", "Malaga", "Bilbao", "Naples",
+    "Venice", "Verona", "Vicenza", "Bassano del Grappa", "Turin", "Genoa", "Innsbruck", "Salzburg", "Graz", "Brno",
+    "Gdansk", "Wroclaw", "Poznan", "Aarhus", "Bergen", "Gothenburg", "Malmo", "Alicante",
+    "Palma", "Ibiza", "Reykjavik", "Thessaloniki", "Skopje", "Podgorica", "Pristina",
+    "Chisinau", "Minsk", "Kiev", "Kyiv", "Odessa", "Lviv", "Split", "Dubrovnik",
+    "Zadar", "Belfast", "Cardiff", "Leeds", "Liverpool", "Bristol", "Newcastle",
+    "Southampton", "Brighton", "Oxford", "Cambridge", "Basel", "Bern", "Lausanne",
+    "Lucerne", "Trier", "Aachen", "Leipzig", "Dresden", "Hannover", "Nuremberg",
+    "Bremen", "Dortmund", "Essen", "Mannheim", "Karlsruhe", "Freiburg", "Heidelberg",
+    "Maastricht", "Utrecht", "The Hague", "Eindhoven", "Groningen", "Leiden",
+    "Haarlem", "Arnhem", "Breda", "Tilburg", "Liege", "Namur", "Charleroi", "Mons",
+)

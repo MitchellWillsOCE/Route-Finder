@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Results - Europe Route Finder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="topbar">
+        <a class="muted" href="/">← New search</a>
+        <div style="text-align:right">
+          <div class="title" style="font-size:16px">{{ query.origin }} → {{ query.destination }}</div>
+          <div class="subtitle">Date {{ query.date }} (±{{ query.flex }} days)</div>
+        </div>
+      </div>
+
+      <div style="height:14px"></div>
+
+      {% if loading %}
+        <div class="card">
+          <div class="row">
+            <span class="spinner"></span>
+            <div>
+              <div class="strong">Searching routes…</div>
+              <div class="hint" id="statusLine">This can take up to ~1–2 minutes on long trips.</div>
+            </div>
+          </div>
+          <div style="height:10px"></div>
+          <div class="hint">You can leave this tab open — results will appear automatically.</div>
+        </div>
+        <script>
+          (function () {
+            const jobId = "{{ job_id }}";
+            const statusLine = document.getElementById("statusLine");
+            async function poll() {
+              try {
+                const r = await fetch(`/api/job/${jobId}`);
+                const j = await r.json();
+                if (j.status === "done") {
+                  window.location.reload();
+                  return;
+                }
+                if (j.status === "error") {
+                  statusLine.textContent = j.error || "Search failed.";
+                  return;
+                }
+                if (j.message) statusLine.textContent = j.message;
+              } catch (e) {
+                // ignore transient errors
+              }
+              setTimeout(poll, 1200);
+            }
+            poll();
+          })();
+        </script>
+      {% endif %}
+
+      {% if error %}
+        <div class="card bad">
+          <div class="strong">Search error</div>
+          <div class="hint" style="margin-top:6px">{{ error }}</div>
+        </div>
+      {% endif %}
+
+      {% if routes and routes|length > 0 %}
+        <section class="routes">
+          {% for r in routes %}
+            <article class="card">
+              <div class="routeHead">
+                <div>
+                  <div class="row">
+                    <div class="strong">{{ r.label }}</div>
+                    <div class="score">Score {{ "%.0f"|format(r.efficiency_score) }}</div>
+                  </div>
+                  <div class="hint" style="margin-top:6px">
+                    <span class="strong">{{ r.duration }}</span>
+                    ·
+                    {% if r.total_cost_eur > 0 %}
+                      <span class="strong">{% if r.cost_is_estimated %}~{% endif %}EUR {{ "%.2f"|format(r.total_cost_eur) }}</span>
+                      {% if r.cost_is_estimated %}<span class="muted">(est.)</span>{% endif %}
+                    {% else %}
+                      <span class="muted">Fare TBC</span>
+                    {% endif %}
+                  </div>
+
+                  {% if r.via and r.via|length > 0 %}
+                    <div class="hint" style="margin-top:8px">
+                      <span class="muted">Via</span> <span class="strong">{{ " -> ".join(r.via) }}</span>
+                    </div>
+                  {% endif %}
+
+                  {% if r.by_mode and r.by_mode|length > 0 %}
+                    <div class="pillRow">
+                      {% for b in r.by_mode %}
+                        <div class="pill">
+                          {{ b.mode|upper }} {{ b.duration }}
+                          {% if b.has_cost %}
+                            · {% if r.cost_is_estimated %}~{% endif %}EUR {{ "%.0f"|format(b.cost_eur) }}
+                          {% else %}
+                            · fare TBC
+                          {% endif %}
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <details style="margin-top:12px">
+                <summary>Legs & booking links</summary>
+                {% for leg in r.legs %}
+                  <div class="leg">
+                    <div class="row" style="justify-content:space-between">
+                      <div class="k">{{ leg.mode }}</div>
+                      <div class="hint">{{ leg.duration }}</div>
+                    </div>
+                    <div style="margin-top:4px">
+                      <span class="strong">{{ leg.origin }}</span> → <span class="strong">{{ leg.destination }}</span>
+                    </div>
+                    <div class="hint" style="margin-top:4px">{{ leg.depart }} → {{ leg.arrive }}</div>
+                    {% if leg.operator %}
+                      <div class="hint" style="margin-top:4px">{{ leg.operator }}{% if leg.service_id %} · {{ leg.service_id }}{% endif %}</div>
+                    {% endif %}
+                    {% if leg.notes %}
+                      <div class="hint" style="margin-top:4px">{{ leg.notes }}</div>
+                    {% endif %}
+                    {% if leg.booking_url %}
+                      <div class="hint" style="margin-top:8px">
+                        <a class="muted" href="{{ leg.booking_url }}" target="_blank" rel="noreferrer">{{ leg.booking_url }}</a>
+                      </div>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </details>
+            </article>
+          {% endfor %}
+        </section>
+      {% endif %}
+    </div>
+  </body>
+</html>
+

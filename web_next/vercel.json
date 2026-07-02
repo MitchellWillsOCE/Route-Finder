@@ -1,5 +1,13 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run build",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "functions": {
+    "api/search.py": {
+      "maxDuration": 60
+    },
+    "api/places.py": {
+      "maxDuration": 10
+    }
+  }
 }

@@ -12,6 +12,10 @@ export type RouteLeg = {
   cost_eur: number;
   booking_url?: string;
   notes?: string;
+  origin_lat?: number;
+  origin_lon?: number;
+  dest_lat?: number;
+  dest_lon?: number;
 };
 
 const WALK_CONNECTOR_MAX_MIN = 15;

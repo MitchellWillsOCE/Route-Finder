@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Europe Route Finder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="topbar">
+        <div>
+          <div class="title" style="font-size:22px">Europe Route Finder</div>
+          <div class="subtitle">Bus · Train · Flight — time vs cost</div>
+        </div>
+        <a class="muted" href="/results">Results</a>
+      </div>
+
+      <div style="height:14px"></div>
+
+      <section class="card">
+        <form method="post" action="/search" class="grid" id="searchForm">
+          <div class="grid two">
+            <label>
+              From
+              <input name="origin" value="{{ defaults.origin }}" placeholder="Amsterdam" />
+            </label>
+            <label>
+              To
+              <input name="destination" value="{{ defaults.destination }}" placeholder="Naples" />
+            </label>
+          </div>
+
+          <div class="grid two">
+            <label>
+              Date
+              <input name="date" value="{{ defaults.date }}" placeholder="2026-07-15" />
+              <div class="hint">YYYY-MM-DD or DD/MM/YYYY</div>
+            </label>
+            <label>
+              Flex days
+              <input name="flex" inputmode="numeric" value="{{ defaults.flex }}" />
+              <div class="hint">Tip: use 1–2 for faster results</div>
+            </label>
+          </div>
+
+          <button class="btn" type="submit" id="submitBtn">Find routes</button>
+
+        </form>
+      </section>
+    </div>
+  </body>
+</html>
+
