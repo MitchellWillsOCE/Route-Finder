@@ -46,10 +46,6 @@ export default function Home() {
           </form>
         </CardContent>
       </Card>
-
-      <div className="mt-4 text-xs text-muted">
-        This UI is intentionally minimal. Results show only duration, cost, and key hubs.
-      </div>
     </main>
   );
 }

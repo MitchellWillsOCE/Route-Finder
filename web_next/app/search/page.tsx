@@ -46,9 +46,6 @@ export default async function SearchPage({
           <div className="text-base font-semibold">
             {from} → {to}
           </div>
-          <div className="text-xs text-muted">
-            Simple results (no notes, no clutter)
-          </div>
         </div>
         <a href="/" className="text-sm underline underline-offset-4">
           New search
