@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 from difflib import SequenceMatcher, get_close_matches
 
@@ -8,6 +9,7 @@ import httpx
 
 from route_finder.config import CONFIG
 from route_finder.european_cities import MAJOR_EUROPEAN_CITIES
+from route_finder.historic_fares import _CITY_COORDS, canonical_place
 
 EUROPE_COUNTRY_CODES = (
     "ad al at ba be bg by ch cy cz de dk ee es fi fr gb gr hr hu ie is it "
@@ -62,22 +64,85 @@ def _short_name(display_name: str) -> str:
 def _similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, _normalize(a), _normalize(b)).ratio()
 
+_NOM_CACHE_TTL_S = 60 * 60
+_NOM_CACHE: dict[str, tuple[float, list[dict]]] = {}
+
+
+def _cached_nominatim(query: str) -> list[dict] | None:
+    key = _normalize(query)
+    item = _NOM_CACHE.get(key)
+    if not item:
+        return None
+    ts, data = item
+    if time.time() - ts > _NOM_CACHE_TTL_S:
+        _NOM_CACHE.pop(key, None)
+        return None
+    return data
+
+
+def _store_nominatim(query: str, data: list[dict]) -> None:
+    _NOM_CACHE[_normalize(query)] = (time.time(), data)
+
+
+def _fast_city_match(query: str) -> ResolvedPlace | None:
+    """
+    Avoid Nominatim for common cities we already know.
+    This also prevents 429 rate-limit errors during development/testing.
+    """
+    key = canonical_place(query)
+    if key in _CITY_COORDS:
+        lat, lon = _CITY_COORDS[key]
+        name = " ".join(part.capitalize() for part in key.split())
+        return ResolvedPlace(
+            input_query=query,
+            name=name,
+            lat=float(lat),
+            lon=float(lon),
+            display_name=name,
+            country_code="",
+            spelling_corrected=_normalize(query) != _normalize(name),
+        )
+    return None
+
 
 def _nominatim_search(client: httpx.Client, query: str, limit: int = 5) -> list[dict]:
-    response = client.get(
-        "https://nominatim.openstreetmap.org/search",
-        params={
-            "q": query,
-            "format": "json",
-            "limit": limit,
-            "addressdetails": 1,
-            "countrycodes": ",".join(EUROPE_COUNTRY_CODES),
-        },
-        headers={"User-Agent": CONFIG.nominatim_user_agent},
-        timeout=CONFIG.request_timeout,
-    )
-    response.raise_for_status()
-    return response.json()
+    cached = _cached_nominatim(query)
+    if cached is not None:
+        return cached
+
+    # Nominatim rate-limits heavily; retry briefly on 429.
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            response = client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={
+                    "q": query,
+                    "format": "json",
+                    "limit": limit,
+                    "addressdetails": 1,
+                    "countrycodes": ",".join(EUROPE_COUNTRY_CODES),
+                },
+                headers={"User-Agent": CONFIG.nominatim_user_agent},
+                timeout=CONFIG.request_timeout,
+            )
+            if response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                sleep_s = float(retry_after) if (retry_after and retry_after.isdigit()) else 1.5
+                time.sleep(min(6.0, sleep_s * (attempt + 1)))
+                continue
+            response.raise_for_status()
+            data = response.json()
+            if isinstance(data, list):
+                _store_nominatim(query, data)
+            return data
+        except Exception as exc:
+            last_exc = exc
+            time.sleep(0.6 * (attempt + 1))
+            continue
+    if last_exc:
+        raise last_exc
+    return []
 
 
 def _flix_suggestions(client: httpx.Client, query: str, limit: int = 5) -> list[str]:
@@ -141,6 +206,10 @@ def resolve_place(query: str, client: httpx.Client) -> ResolvedPlace:
             message="Location cannot be empty.",
             suggestions=[],
         )
+
+    fast = _fast_city_match(query)
+    if fast is not None:
+        return fast
 
     results = _nominatim_search(client, query)
     flix_matches = _flix_suggestions(client, query, limit=5)
