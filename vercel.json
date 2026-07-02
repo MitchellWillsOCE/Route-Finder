@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "web_next/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "alias": ["route.trailthread.app"]
+}
