@@ -7,6 +7,7 @@ type Route = {
   total_cost_eur: number;
   cost_is_estimated: boolean;
   via: string[];
+  stopovers?: { city: string; reason: string }[];
   by_mode: { mode: string; duration: string; cost_eur: number; has_cost: boolean }[];
 };
 
@@ -74,6 +75,14 @@ export default async function SearchPage({
               {r.via?.length ? (
                 <div className="mt-2 text-xs text-muted">
                   Via <span className="text-foreground">{r.via.join(" → ")}</span>
+                </div>
+              ) : null}
+              {r.stopovers?.length ? (
+                <div className="mt-2 text-xs text-muted">
+                  Suggested stops{" "}
+                  <span className="text-foreground">
+                    {r.stopovers.map((s) => s.city).join(" · ")}
+                  </span>
                 </div>
               ) : null}
 

@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from route_finder.models import SearchRequest, TransportMode
-from route_finder.route_summary import mode_breakdown, route_via_hubs
+from route_finder.route_summary import mode_breakdown, route_via_hubs, suggest_stopovers
 from route_finder.search import search_routes
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -79,6 +79,7 @@ def _format_duration(minutes: int) -> str:
 
 def _route_to_view(route, *, origin: str, destination: str) -> dict[str, Any]:
     via = route_via_hubs(route, origin, destination)
+    stopovers = suggest_stopovers(route, origin, destination)
     breakdown = mode_breakdown(route)
     by_mode = []
     for mode in (TransportMode.TRAIN, TransportMode.BUS, TransportMode.PLANE):
@@ -117,6 +118,7 @@ def _route_to_view(route, *, origin: str, destination: str) -> dict[str, Any]:
         "cost_is_estimated": bool(route.price_estimated and not route.price_verified),
         "modes": [m.value for m in route.modes_used if m.value != "walk"],
         "via": via,
+        "stopovers": stopovers,
         "by_mode": by_mode,
         "data_source": route.data_source,
         "legs": legs,
@@ -263,6 +265,7 @@ def api_search(
             "total_cost_eur": round(r.total_cost_eur, 2),
             "cost_is_estimated": bool(r.price_estimated and not r.price_verified),
             "via": route_via_hubs(r, req.origin, req.destination),
+            "stopovers": suggest_stopovers(r, req.origin, req.destination),
             "by_mode": [
                 {
                     "mode": m["mode"],

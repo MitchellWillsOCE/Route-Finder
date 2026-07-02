@@ -122,6 +122,67 @@ def mode_breakdown(route: RouteOption) -> dict[TransportMode, ModeBreakdown]:
     return totals
 
 
+def suggest_stopovers(route: RouteOption, origin: str, destination: str) -> list[dict[str, str]]:
+    """
+    Suggest convenient stopover hubs along this route.
+
+    Heuristic rules:
+    - Prefer major hubs that appear as transfer points (layover >= ~45m).
+    - For very long trips, also suggest a midpoint hub for an overnight stop.
+    """
+    hubs = route_via_hubs(route, origin, destination)
+    if not hubs:
+        return []
+
+    # Compute layovers at major transfer points (ignoring short walks).
+    transfers: list[tuple[str, int]] = []
+    for prev, nxt in zip(route.legs, route.legs[1:]):
+        if prev.mode == TransportMode.WALK:
+            continue
+        if nxt.mode == TransportMode.WALK and nxt.duration_minutes <= 15:
+            continue
+        gap_min = int((nxt.depart - prev.arrive).total_seconds() / 60)
+        if gap_min < 0:
+            continue
+        point = prev.destination
+        hub = _place_hub(point)
+        if hub and hub in hubs:
+            transfers.append((hub, gap_min))
+
+    suggestions: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def add(city: str, reason: str) -> None:
+        if city in seen:
+            return
+        seen.add(city)
+        suggestions.append({"city": city, "reason": reason})
+
+    for hub, gap in sorted(transfers, key=lambda x: -x[1]):
+        if gap >= 45:
+            add(hub, f"Easy stopover (transfer ~{gap}m)")
+
+    # Midpoint/overnight suggestion for long trips.
+    total = route.total_duration_minutes
+    if total >= 10 * 60:
+        target = total // 2
+        elapsed = 0
+        best: tuple[str, int] | None = None
+        for leg in route.legs:
+            if leg.mode == TransportMode.WALK:
+                continue
+            elapsed += max(leg.duration_minutes, 0)
+            hub = _place_hub(leg.destination)
+            if hub and hub in hubs:
+                delta = abs(elapsed - target)
+                if best is None or delta < best[1]:
+                    best = (hub, delta)
+        if best:
+            add(best[0], "Convenient midpoint stop")
+
+    return suggestions[:3]
+
+
 def route_category(route: RouteOption) -> str:
     modes = {leg.mode for leg in route.legs if leg.mode != TransportMode.WALK}
     has_plane = TransportMode.PLANE in modes
